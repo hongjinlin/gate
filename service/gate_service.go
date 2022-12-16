@@ -8,7 +8,7 @@
 package service
 
 import (
-	"gate/model"
+	"gate/models"
 	"gate/sys"
 	"github.com/PuerkitoBio/goquery"
 	"log"
@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-var GateUrl = "https://www.vpngate.net/cn/"
+var GateUrl = "https://www.vpngate.net/"
 
 type GateService struct {
 }
@@ -28,7 +28,7 @@ func init() {
 
 func (g GateService) Gates() {
 	gates := g.gatesFromNet()
-	gateMgr := model.GateMgr(sys.DB)
+	gateMgr := models.GateMgr(sys.DB)
 	ips := make([]string, 0, len(gates))
 	for _, gate := range gates {
 		ips = append(ips, gate.IP)
@@ -37,9 +37,9 @@ func (g GateService) Gates() {
 	if err != nil {
 		log.Printf("get ips data error: %s", err.Error())
 	}
-	existGatesMap := make(map[string]*model.Gate, len(existGates))
-	updataGates := make([]*model.Gate, 0, len(existGates))
-	saveGates := make([]*model.Gate, 0, len(existGates))
+	existGatesMap := make(map[string]*models.Gate, len(existGates))
+	updataGates := make([]*models.Gate, 0, len(existGates))
+	saveGates := make([]*models.Gate, 0, len(existGates))
 
 	for _, gate := range existGates {
 		existGatesMap[gate.IP] = gate
@@ -61,23 +61,23 @@ func (g GateService) Gates() {
 	}
 	gateMgr.CreateInBatches(saveGates, len(saveGates))
 	for i := range updataGates {
-		gateMgr := model.GateMgr(sys.DB)
+		gateMgr := models.GateMgr(sys.DB)
 		gateMgr.Model(updataGates[i]).
-			Select(model.GateColumns.Runtime, model.GateColumns.UpdateTime).
+			Select(models.GateColumns.Runtime, models.GateColumns.UpdateTime).
 			Updates(updataGates[i])
 	}
 }
 
 func initTable() {
-	if sys.DB.Migrator().HasTable(&model.Gate{}) {
+	if sys.DB.Migrator().HasTable(&models.Gate{}) {
 		return
 	}
-	sys.DB.Migrator().CreateTable(&model.Gate{})
+	sys.DB.Migrator().CreateTable(&models.Gate{})
 }
 
-func (g GateService) gatesFromNet() (gates []*model.Gate) {
+func (g GateService) gatesFromNet() (gates []*models.Gate) {
 	viewstate, viewstategenerator, eventvalidation := g.token()
-	resp, err := http.PostForm("https://www.vpngate.net/cn/", url.Values{
+	resp, err := http.PostForm(GateUrl, url.Values{
 		"C_L2TP":               {"on"},
 		"Button3":              {"更新服务器列表"},
 		"__VIEWSTATE":          {viewstate},
@@ -109,7 +109,7 @@ func (g GateService) gatesFromNet() (gates []*model.Gate) {
 		nation := children.Eq(0).Text()
 		ip := children.Eq(1).Children().Eq(2).Text()
 		runtime := children.Eq(2).Children().Eq(2).Text()
-		gate := &model.Gate{
+		gate := &models.Gate{
 			Nation:     nation,
 			IP:         ip,
 			Runtime:    runtime,

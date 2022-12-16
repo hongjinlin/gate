@@ -1,4 +1,4 @@
-package model
+package models
 
 import (
 	"context"
@@ -72,6 +72,11 @@ func (obj *_GateMgr) WithIP(ip string) Option {
 // WithRuntime runtime获取 运行时间
 func (obj *_GateMgr) WithRuntime(runtime string) Option {
 	return optionFunc(func(o *options) { o.query["runtime"] = runtime })
+}
+
+// WithStatus status获取 1:available 0: unavailable
+func (obj *_GateMgr) WithStatus(status int) Option {
+	return optionFunc(func(o *options) { o.query["status"] = status })
 }
 
 // WithCreateTime create_time获取
@@ -189,6 +194,20 @@ func (obj *_GateMgr) GetFromRuntime(runtime string) (results []*Gate, err error)
 // GetBatchFromRuntime 批量查找 运行时间
 func (obj *_GateMgr) GetBatchFromRuntime(runtimes []string) (results []*Gate, err error) {
 	err = obj.DB.WithContext(obj.ctx).Model(Gate{}).Where("`runtime` IN (?)", runtimes).Find(&results).Error
+
+	return
+}
+
+// GetFromStatus 通过status获取内容 1:available 0: unavailable
+func (obj *_GateMgr) GetFromStatus(status int) (results []*Gate, err error) {
+	err = obj.DB.WithContext(obj.ctx).Model(Gate{}).Where("`status` = ?", status).Find(&results).Error
+
+	return
+}
+
+// GetBatchFromStatus 批量查找 1:available 0: unavailable
+func (obj *_GateMgr) GetBatchFromStatus(statuss []int) (results []*Gate, err error) {
+	err = obj.DB.WithContext(obj.ctx).Model(Gate{}).Where("`status` IN (?)", statuss).Find(&results).Error
 
 	return
 }
