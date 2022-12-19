@@ -17,7 +17,7 @@ func (c *CheckService) Check() {
 	gateMgr := models.GateMgr(sys.DB)
 	var count int64
 	gateMgr.Count(&count)
-	pages := count / size
+	pages := count/size + 1
 	for i := 1; i <= int(pages); i++ {
 		gateMgr.Reset()
 		page := new(models.Page)
@@ -59,7 +59,7 @@ func (c *CheckService) doCheck(gates []models.Gate) (updates []models.Gate) {
 	for i, gate := range gates {
 		go func(ii int, g models.Gate) {
 			conn, err := net.Dial("udp", g.IP+":500")
-			conn.SetDeadline(time.Now().Add(5 * time.Second))
+			conn.SetDeadline(time.Now().Add(10 * time.Second))
 			if err != nil {
 				if g.Status == 0 {
 					connectionChan <- -1
@@ -70,7 +70,13 @@ func (c *CheckService) doCheck(gates []models.Gate) (updates []models.Gate) {
 				return
 			}
 			if _, err := conn.Write(testPacketIPSecTransport()); err != nil {
-				log.Fatalf(err.Error())
+				if g.Status == 0 {
+					connectionChan <- -1
+					return
+				}
+				gates[ii].Status = 0
+				connectionChan <- ii
+				return
 			}
 			buf := make([]byte, 2048)
 			n, err := conn.Read(buf)
