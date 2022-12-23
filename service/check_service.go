@@ -5,6 +5,7 @@ import (
 	"gate/sys"
 	"log"
 	"net"
+	"reflect"
 	"time"
 )
 
@@ -37,20 +38,20 @@ func (c *CheckService) Check() {
 }
 
 func (c *CheckService) doCheck(gates []models.Gate) (updates []models.Gate) {
-	connectionChan := make(chan int, 10)
+	connectionChan := make(chan models.Gate, 10)
 	endChan := make(chan interface{})
 	lenOfGates := len(gates)
 	updates = make([]models.Gate, 0, lenOfGates)
-	index := 0
+	count := 0
 	go func() {
 		for {
 			select {
-			case i := <-connectionChan:
-				index++
-				if i != -1 {
-					updates = append(updates, gates[i])
+			case g := <-connectionChan:
+				count++
+				if !reflect.DeepEqual(g, models.Gate{}) {
+					updates = append(updates, g)
 				}
-				if index == lenOfGates {
+				if count == lenOfGates {
 					endChan <- nil
 				}
 			}
@@ -59,55 +60,40 @@ func (c *CheckService) doCheck(gates []models.Gate) (updates []models.Gate) {
 	for i, gate := range gates {
 		go func(ii int, g models.Gate) {
 			conn, err := net.Dial("udp", g.IP+":500")
-			conn.SetDeadline(time.Now().Add(10 * time.Second))
+			conn.SetDeadline(time.Now().Add(5 * time.Second))
 			if err != nil {
-				if g.Status == 0 {
-					connectionChan <- -1
-					return
-				}
-				gates[ii].Status = 0
-				connectionChan <- ii
+				c.updateCheck(g, 0, connectionChan)
 				return
 			}
 			if _, err := conn.Write(testPacketIPSecTransport()); err != nil {
-				if g.Status == 0 {
-					connectionChan <- -1
-					return
-				}
-				gates[ii].Status = 0
-				connectionChan <- ii
+				c.updateCheck(g, 0, connectionChan)
 				return
 			}
 			buf := make([]byte, 2048)
 			n, err := conn.Read(buf)
 			if err != nil {
-				if g.Status == 0 {
-					connectionChan <- -1
-					return
-				}
-				gates[ii].Status = 0
-				connectionChan <- ii
+				c.updateCheck(g, 0, connectionChan)
 				return
 			}
 			if n != 204 {
-				if g.Status == 0 {
-					connectionChan <- -1
-					return
-				}
-				gates[ii].Status = 0
-				connectionChan <- ii
+				c.updateCheck(g, 0, connectionChan)
 				return
 			}
-			if g.Status == 0 {
-				gates[ii].Status = 1
-				connectionChan <- ii
-				return
-			}
-			connectionChan <- -1
+			c.updateCheck(g, 1, connectionChan)
 		}(i, gate)
 	}
 	<-endChan
 	return
+}
+
+func (c *CheckService) updateCheck(gate models.Gate, status int, ch chan<- models.Gate) {
+	var _g models.Gate
+	if gate.Status == status {
+		ch <- _g
+		return
+	}
+	gate.Status = status
+	ch <- gate
 }
 
 func testPacketIPSecTransport() []byte {
